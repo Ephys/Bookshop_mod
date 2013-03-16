@@ -1,4 +1,4 @@
-package net.minecraft.src;
+package nf.fr.bookshop;
 
 import java.util.Collections;
 import java.util.Enumeration;
