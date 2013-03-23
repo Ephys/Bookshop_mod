@@ -7,6 +7,3 @@
 <p>Ce mod permet d'intéragir avec le site <a href="http://bookshop.fr.nf">du même nom</a></p>
 <p>Plus d'informations sur <a href="http://bookshop.fr.nf/mod/">sa page officielle</a></p>
 <p><a href="http://bookshop.fr.nf/download/">Archives</a></p>
-
-<h2>License</h2>
-<p>Copyright &copy; <a href="http://ephys.fr.nf">Ephys</a> 2012</p>
