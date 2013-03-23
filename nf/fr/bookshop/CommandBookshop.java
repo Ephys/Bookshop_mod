@@ -24,6 +24,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import cpw.mods.fml.common.FMLCommonHandler;
+import cpw.mods.fml.relauncher.Side;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityClientPlayerMP;
@@ -112,7 +113,7 @@ public class CommandBookshop extends CommandBase
     			}
     		}
     		
-    		JSONObject book_json = loadBook(par2ArrayOfStr[1]);
+    		JSONObject book_json = Bookshop_requests.loadBook(par2ArrayOfStr[1]);
     		if(book_json == null) {
     			player.sendChatToPlayer(master.modTranslation.get("notFound"));
     			return;
@@ -133,7 +134,7 @@ public class CommandBookshop extends CommandBase
     		    			}
     		    			
     		    			if(!master.giveBook)
-    		    				createBook(bookTitle, bookPages, bookAuthor, inHand);
+    		    				Bookshop_requests.createBook(bookTitle, bookPages, bookAuthor, inHand, player);
     		    			else
     		    				createBook(bookTitle, bookPages, bookAuthor, player);
     		    			 player.sendChatToPlayer(master.modTranslation.get("loaded"));
@@ -165,20 +166,33 @@ public class CommandBookshop extends CommandBase
     			return;
 			}
     		
-    		if(par2ArrayOfStr.length == 1)
-    			uploadBook(player, inHand);
-    		else if(par2ArrayOfStr.length == 2)
-    			uploadBook(player, inHand, par2ArrayOfStr[1]);
-    		else
-    			uploadBook(player, inHand, par2ArrayOfStr[1], par2ArrayOfStr[2]);
-    	} 
+    		try {
+	    		JSONObject upload_result;
+	    		if(par2ArrayOfStr.length == 1)
+	    			upload_result = uploadBook(inHand);
+	    		else if(par2ArrayOfStr.length == 2)
+	    			upload_result = Bookshop_requests.uploadBook(player, inHand, par2ArrayOfStr[1]);
+	    		else
+	    			upload_result = Bookshop_requests.uploadBook(inHand, par2ArrayOfStr[1], par2ArrayOfStr[2]);
+	    		
+	    		if(upload_result == null)
+	    			player.sendChatToPlayer(master.modTranslation.get("requestError"));
+	    		else if (upload_result.isNull("error"))
+	    			player.sendChatToPlayer(master.modTranslation.get("uploadComplete")+" " + upload_result.getString("success"));
+	    		else {
+	    			player.sendChatToPlayer(upload_result.getString("error"));
+	    		}
+    		} catch (JSONException e) {
+				e.printStackTrace();
+			}
+    	}
     	// traitement "list"
     	else if(par2ArrayOfStr[0].equalsIgnoreCase("list")) {
     		player.sendChatToPlayer(master.modTranslation.get("loading"));
     		if(par2ArrayOfStr.length != 2)
-    			loadUserBooks(player, player.username);
+    			parseBookList_user(player, Bookshop_requests.loadUserBooks(player.username));
     		else
-    			loadUserBooks(player, par2ArrayOfStr[1]);
+    			parseBookList_user(player, Bookshop_requests.loadUserBooks(par2ArrayOfStr[1]));
     	} else if(par2ArrayOfStr[0].equalsIgnoreCase("search")) {
     		if(par2ArrayOfStr.length != 2) {
     			par1ICommandSender.sendChatToPlayer(master.modTranslation.get("syntax")+" : "+this.commandList.get("search"));
@@ -186,16 +200,16 @@ public class CommandBookshop extends CommandBase
     		}
     		
     		player.sendChatToPlayer(master.modTranslation.get("loading"));
-    		searchTitle(player, par2ArrayOfStr[1]);
+    		parseBookList_title(player, Bookshop_requests.loadTitleList(par2ArrayOfStr[1]));
     	} else if(par2ArrayOfStr[0].equalsIgnoreCase("lastest")) {
     		player.sendChatToPlayer(master.modTranslation.get("loading"));
-    		loadBookList(player, "lastest");
+    		parseBookList_general(player, Bookshop_requests.loadBookList("lastest"));
     	} else if(par2ArrayOfStr[0].equalsIgnoreCase("random")) {
     		player.sendChatToPlayer(master.modTranslation.get("loading"));
-    		loadBookList(player, "random");
+    		parseBookList_general(player, Bookshop_requests.loadBookList("random"));
     	} else if(par2ArrayOfStr[0].equalsIgnoreCase("top") || par2ArrayOfStr[0].equalsIgnoreCase("best")) {
     		player.sendChatToPlayer(master.modTranslation.get("loading"));
-    		loadBookList(player, "best");
+    		parseBookList_general(player, Bookshop_requests.loadBookList("best"));
     	} else if(par2ArrayOfStr[0].equalsIgnoreCase("wiki")) {
     		if(par2ArrayOfStr.length != 2) {
     			par1ICommandSender.sendChatToPlayer(master.modTranslation.get("syntax")+" : "+this.commandList.get("wiki"));
@@ -204,7 +218,7 @@ public class CommandBookshop extends CommandBase
     		
     		player.sendChatToPlayer(master.modTranslation.get("loading"));
    
-    		JSONObject book_json = loadWikiBook(par2ArrayOfStr[1]);
+    		JSONObject book_json = Bookshop_requests.loadWikiBook(par2ArrayOfStr[1]);
     		//System.out.println(book_json);
     		if(book_json == null) {
     			player.sendChatToPlayer(master.modTranslation.get("notFound"));
@@ -224,7 +238,7 @@ public class CommandBookshop extends CommandBase
 		    			}
 		    			
 		    			if(!master.giveBook)
-		    				createBook(bookTitle, bookPages, "Minecraftwiki.net", inHand);
+		    				Bookshop_requests.createBook(bookTitle, bookPages, "Minecraftwiki.net", inHand, player);
 		    			else
 		    				createBook(bookTitle, bookPages, "Minecraftwiki.net", player);
 		    			
@@ -238,397 +252,6 @@ public class CommandBookshop extends CommandBase
     	} else {
     		getCommandUsage(par1ICommandSender);
     	}
-    }
-    
-    private JSONObject loadWikiBook(final String pageName) {
-    	String request_url = master.wikiApi_url+"?redirects=true&format=json&action=parse&page="+pageName+"&prop=wikitext";
-
-    	try {
-    		InputStream is = new URL(request_url).openStream();
-    		BufferedReader br = new BufferedReader(new InputStreamReader(is));
-    		return parseWikiBook(new JSONObject(br.readLine()));
-        } catch (Exception e) {
-			e.printStackTrace();
-		}
-    	
-    	return null;
-    }
-    
-    private JSONObject parseWikiBook(JSONObject json) {
-    	JSONObject output = new JSONObject();
-    	String pages;
-    	ArrayList pagesArray = new ArrayList();
-    	
-		try {
-			pages = json.getJSONObject("parse").getJSONObject("wikitext").getString("*");
-			
-			// parsage des pages
-			String usualChars = "[\\w#\\?\\&_\\- \\(\\)\"']";
-			
-			pages = pages.replaceAll("\\[\\[("+usualChars+"*?):("+usualChars+"*?)\\|(["+usualChars+"]*?)\\]\\]", "$3");
-			pages = pages.replaceAll("\\[\\[("+usualChars+"*?):("+usualChars+"*?)\\]\\]", "$2");
-			pages = pages.replaceAll("\\[\\[("+usualChars+"*?)\\|("+usualChars+"*?)\\]\\]", "$2");
-	    	pages = pages.replaceAll("\\[\\[(.*?)\\]\\]", "$1");
-	    	
-	    	pages = pages.replaceAll("\\{\\{("+usualChars+"*?)\\|("+usualChars+"*?)\\|("+usualChars+"*?)\\|("+usualChars+"*?)\\}\\}", "$2");
-	    	pages = pages.replaceAll("\\{\\{("+usualChars+"*?)\\|\\|("+usualChars+"*?)\\|("+usualChars+"*?)\\}\\}", "$2 : $3");
-	    	pages = pages.replaceAll("\\{\\{("+usualChars+"*?)\\|("+usualChars+"*?)\\|("+usualChars+"*?)\\}\\}", "$2");
-	    	pages = pages.replaceAll("\\{\\{("+usualChars+"*?)\\|("+usualChars+"*?)\\}\\}", "$2");
-	    	pages = pages.replaceAll("(?s)\\{\\{(.*?)\\}\\}", "");
-	    	
-	    	pages = pages.replaceAll("(?s)\\{\\|(.*?)\\|\\}", "");
-	    	pages = pages.replaceAll("'''(.*?)'''", "\\§o$1\\§r");
-	    	pages = pages.replaceAll("''(.*?)''", "$1");
-	    	pages = pages.replaceAll("'(.*?)'", "$1");
-	    	pages = pages.replaceAll("(?s)\n{2,}", "\n");
-	    	pages = pages.replaceAll("(?s)==([ "+usualChars+"]*?)==([ \t\r\n]*?)==([ "+usualChars+"]*?)==", "== $3 ==");
-	    	pages = pages.replaceAll("== ("+usualChars+"*?) ==", "\\§l== $1 ==\\§r");
-	    	pages = pages.replaceAll("(?s)<[^>]*>(.+?)<\\/[^>]*>", "");
-	    	pages = pages.replaceAll("(?s)<[^>]*>", "");
-			
-			pagesArray = split_string_to_mcpages(pages);
-			
-			output.put("title", json.getJSONObject("parse").getString("title"));
-			output.put("pages", pagesArray);
-			
-			return output;
-		} catch (JSONException e) {
-			e.printStackTrace();
-		}
-		
-		return null;
-    }
-    
-    private ArrayList split_string_to_mcpages(String pages) {
-		ArrayList output = new ArrayList();
-		String[] pagesArray = pages.split("\n");
-		
-    	int MAXLINES = 13;
-    	int MAXCHAR = 220;
-    	
-    	int nCounter = 0;
-		String formating_page = "";
-		
-		for(int i = 0; i < pagesArray.length; i++) {
-    		// si on dépasse le nombre de lignes maximales
-    		// si on dépasse le nombre de caractères maximaux
-    		// si la prochaine page est un titre:
-    		// --> enregistrer la page actuelle et démarer la suivante
-			if(nCounter > MAXLINES || (formating_page.length() >= MAXCHAR) || pagesArray[i].startsWith("==")) {
-				String nextSentence = "";
-				if(formating_page.replaceAll("(?s)[ \n\t\r]", "").length() != 0 && formating_page.length() < MAXCHAR) {
-					output.add(formating_page);
-				} else if(formating_page.length() > MAXCHAR) { // découper en chaines de 250 caractères et séparer par les espaces
-					String[] words = formating_page.split(" ");
-					String newSentence = "";
-					Boolean isOverflowed= false;
-					for(int j = 0; j < words.length; j++) {
-						if(newSentence.length()+words[j].length() > MAXCHAR)
-							isOverflowed = true;
-						
-						if(isOverflowed) {
-							nextSentence += words[j]+" ";
-						} else {
-							newSentence += words[j]+" ";
-						}
-					}
-					output.add(newSentence);
-				}
-				
-				nCounter = 0;
-				formating_page = nextSentence;
-			}
-			if(formating_page.length() < MAXCHAR) {
-				formating_page = formating_page.concat(pagesArray[i]+"\n");
-				nCounter++;
-			}
-    	}
-		return output;
-    }
-
-	private JSONObject loadBook(final String id) {
-    	String request_url = master.mainApi_url+"api.php?id="+id;
-
-    	if(Integer.parseInt(id) < 1)
-    		return null;
-    	
-    	try
-        {
-    		InputStream is = new URL(request_url).openStream();
-
-    		BufferedReader br = new BufferedReader(new InputStreamReader(is));
-
-    		String l = br.readLine();
-
-    		return new JSONObject(l);
-        }
-		catch (Exception e)
-		{
-			e.printStackTrace();
-		}
-    	
-    	return null;
-    }
-    
-    // version on modifie le contenu du livre
-    private void createBook(final String title, final List pagesArray, final String author, final ItemStack inHand) {
-    	new Thread() {
-	      public void run() {
-	    	  String s = "MC|BEdit";
-	    	  if(inHand.itemID == Item.book.itemID) {
-	    		  inHand.itemID = Item.writtenBook.itemID;
-	    	  } else if(inHand.itemID != Item.writableBook.itemID && inHand.itemID != Item.writtenBook.itemID) {
-	    		  return;
-	    	  }
-	    	  
-	    	  NBTTagCompound nbttagcompound = inHand.getTagCompound();
-	        
-	    	  NBTTagList pages_tag = new NBTTagList("pages");
-	    	  for (int i = 0; i < pagesArray.size(); i++) {
-	    		  pages_tag.appendTag(new NBTTagString(i + 1 + "", ((String)pagesArray.get(i)).replaceAll("\r", "")));
-	    	  }
-
-	    	  inHand.setTagInfo("pages", pages_tag);
-	    	  if(inHand.itemID == Item.writtenBook.itemID) {
-	    		  s = "MC|BSign";
-	    		  inHand.setTagInfo("author", new NBTTagString("author", author.trim()));
-	    		  inHand.setTagInfo("title", new NBTTagString("title", title.trim()));
-	    	  }
-	    	  
-	    	  ByteArrayOutputStream bytearrayoutputstream = new ByteArrayOutputStream();
-	    	  DataOutputStream dataoutputstream = new DataOutputStream(bytearrayoutputstream);
-	    	  try
-	    	  {
-	    		  Packet.writeItemStack(inHand, dataoutputstream);
-	    		  FMLCommonHandler.instance().getSidedDelegate().sendPacket(new Packet250CustomPayload(s, bytearrayoutputstream.toByteArray()));
-	    	  }
-	    	  catch (Exception exception)
-	    	  {
-	    		  exception.printStackTrace();
-	    	  }
-	      }
-	    }
-	    .start();
-    }
-    
-    // version on /give le book
-    private void createBook(final String title, final List pagesArray, final String author, final EntityPlayerMP player) {
-    	new Thread() {
-	      public void run() {
-	        String s = "MC|BSign";
-	        ItemStack itemstackBook = new ItemStack(Item.writtenBook, 1);
-	        NBTTagCompound nbttagcompound = itemstackBook.getTagCompound();
-	        
-	        NBTTagList pages_tag = new NBTTagList("pages");
-	        for (int i = 0; i < pagesArray.size(); i++) {
-	        	pages_tag.appendTag(new NBTTagString(i + 1 + "", ((String)pagesArray.get(i)).replaceAll("\r", "")));
-	        }
-
-	        itemstackBook.setTagInfo("author", new NBTTagString("author", author.trim()));
-	        itemstackBook.setTagInfo("title", new NBTTagString("title", title.trim()));
-	        itemstackBook.setTagInfo("pages", pages_tag);
-	        player.dropPlayerItem(itemstackBook);
-
-	        ByteArrayOutputStream bytearrayoutputstream = new ByteArrayOutputStream();
-	        DataOutputStream dataoutputstream = new DataOutputStream(bytearrayoutputstream);
-	        try 
-	        {
-                Packet.writeItemStack(itemstackBook, dataoutputstream);
-                FMLCommonHandler.instance().getSidedDelegate().sendPacket(new Packet250CustomPayload(s, bytearrayoutputstream.toByteArray()));
-	        }
-	        catch (Exception exception)
-	        {
-	        	exception.printStackTrace();
-	        }
-	      }
-	    }
-	    .start();
-    }
-    
-    private void uploadBook(EntityPlayer player, ItemStack inHand) {
-		uploadBook(player, inHand, master.bookshop_token, master.bookshop_login);
-	}
-    
-    private void uploadBook(EntityPlayer player, ItemStack inHand, final String token) {
-		uploadBook(player, inHand, token, player.username);
-	}
-    
-    private void uploadBook(final EntityPlayer player, final ItemStack book, final String token, final String username) {
-	    new Thread()
-	    {
-	      public void run() {
-	        NBTTagCompound nbttagcompound = book.getTagCompound();
-	        NBTTagList tag_pages = nbttagcompound.getTagList("pages");
-	        int page_number = 0;
-	        if (tag_pages != null) {
-	          tag_pages = (NBTTagList)tag_pages.copy();
-	          page_number = tag_pages.tagCount();
-	
-	          if (page_number < 1) {
-	        	  page_number = 0;
-	          }
-	        }
-	
-	        ArrayList list = new ArrayList();
-	        for (int i = 0; i < tag_pages.tagCount(); i++) {
-	        	NBTTagString page = (NBTTagString)tag_pages.tagAt(i);
-	        	list.add(page.toString());
-	        }
-	
-	        try {
-	          JSONObject jso = new JSONObject();
-	          jso.put("pages", list);
-	          if(book.itemID == Item.writtenBook.itemID) {
-	        	  jso.put("title", nbttagcompound.getString("title"));
-	        	  jso.put("author", nbttagcompound.getString("author"));
-	          } else if(book.itemID == Item.writableBook.itemID) {
-	        	  jso.put("title", "");
-	        	  jso.put("author", player.username);
-	          } else {
-	        	  return;
-	          }
-	
-	          String jsonEncodedBook = jso.toString();
-	          jsonEncodedBook = URLEncoder.encode(jsonEncodedBook, "UTF-8");
-	
-	          String url = master.mainApi_url+"upload.php?username=" + username + "&token=" + token + "&data=" + jsonEncodedBook;
-	          
-	          InputStream is = new URL(url).openStream();
-	
-	          BufferedReader br = new BufferedReader(new InputStreamReader(is));
-	
-	          String retour = br.readLine();
-	
-	          JSONObject json_data = new JSONObject(retour);
-	          String messageR;
-	          if (json_data.isNull("error"))
-	            messageR = master.modTranslation.get("uploadComplete")+" " + json_data.getString("success");
-	          else {
-	            messageR = json_data.getString("error");
-	          }
-	          player.sendChatToPlayer(messageR);
-	        }
-	        catch (JSONException e) {
-	          e.printStackTrace();
-	        } catch (IOException e) {
-	          e.printStackTrace();
-	        }
-	      }
-	    }
-	    .start();
-	}
-    
-    private void loadUserBooks(EntityPlayer player, String username) {
-		try {
-			JSONObject json_data = apiRequest(player, "api.php?user=" + username);
-			if(json_data.isNull("error")) {
-				List<String> keys = getJSONListKeys(json_data);
-				
-			    if(keys.size() < 3) // key 0 = author, key 1 = type
-			    	player.sendChatToPlayer("["+username+"] "+master.modTranslation.get("bookListEmpty"));
-			    else {
-			    	player.sendChatToPlayer(master.modTranslation.get("bookList"));
-				    for(String key : keys) {
-				    	if(key.equalsIgnoreCase("author") || key.equalsIgnoreCase("type"))
-				    		continue;
-
-				    	JSONObject book = json_data.getJSONObject(key);
-				    	player.sendChatToPlayer("- "+book.getString("title") + " (" + book.getString("id") + ")");
-				    }	
-			    }
-			} else {
-				player.sendChatToPlayer(json_data.getString("error"));
-			}
-		} catch (JSONException e) {
-			e.printStackTrace();
-		}
-    }
-    
-    private void loadBookList(EntityPlayer player, final String listType) {
-		try {
-			JSONObject json_data = apiRequest(player, "api.php?"+listType+"=true");
-			
-			if(json_data.isNull("error")) {
-				List<String> keys = getJSONListKeys(json_data);
-				
-			    if(keys.size() < 2)
-			    	player.sendChatToPlayer(master.modTranslation.get("bookListEmpty"));
-			    else {
-			    	player.sendChatToPlayer(master.modTranslation.get("bookList"));
-				    for(String key : keys) {
-				    	if(key.equalsIgnoreCase("type"))
-				    		continue;
-				    	JSONObject book = json_data.getJSONObject(key);
-				    	player.sendChatToPlayer("- "+book.getString("title") + " (" + book.getString("id") + ")");
-				    }	
-			    }
-			} else {
-				player.sendChatToPlayer(json_data.getString("error"));
-			}
-		} catch (JSONException e) {
-			e.printStackTrace();
-		}
-    }
-    
-    private void searchTitle(EntityPlayer player, String pattern) {
-		try {
-			JSONObject json_data = apiRequest(player, "api.php?title=" + pattern);
-			
-			if(json_data.isNull("error")) {
-				List<String> keys = getJSONListKeys(json_data);
-				
-			    if(keys.size() < 3)
-			    	player.sendChatToPlayer(master.modTranslation.get("searchListEmpty"));
-			    else {
-			    	player.sendChatToPlayer(master.modTranslation.get("titleList")+" '"+pattern+"'");
-				    for(String key : keys){
-				    	if(key.equalsIgnoreCase("title") || key.equalsIgnoreCase("type"))
-				    		continue;
-				    	
-				    	JSONObject book = json_data.getJSONObject(key);
-				    	player.sendChatToPlayer("- "+book.getString("title") + " (" + book.getString("id") + ")");
-				    }
-			    }
-			} else {
-				player.sendChatToPlayer(json_data.getString("error"));
-			}
-		} catch (JSONException e) {
-			e.printStackTrace();
-		}
-    }
-    
-    public List<String> getJSONListKeys(JSONObject jsonList) {
-    	Iterator<String> myIter = jsonList.keys();
-		List<String> keys = new ArrayList<String>();
-
-	    while(myIter.hasNext()){
-	    	keys.add(myIter.next());
-	    }
-	    
-	    Collections.sort(keys);
-	    
-	    return keys;
-    }
-    
-    public JSONObject apiRequest(EntityPlayer player, String request) {
-    	String url = master.mainApi_url+request;
-    	InputStream is;
- 		try {
- 			is = new URL(url).openStream();
- 			BufferedReader br = new BufferedReader(new InputStreamReader(is));
- 	        JSONObject json_data;
- 			try {
- 				return new JSONObject(br.readLine());
- 			} catch (JSONException e) {
- 				e.printStackTrace();
- 			}
- 		} catch (MalformedURLException e) {
- 			e.printStackTrace();
- 		} catch (IOException e) {
- 			e.printStackTrace();
- 		}
- 		player.sendChatToPlayer(master.modTranslation.get("requestError"));
-		return null;
     }
     
     protected void storePass(String[] cmd, EntityPlayer player) {
@@ -652,4 +275,123 @@ public class CommandBookshop extends CommandBase
 		
 		master.storePass(login, pass);
     }
+    
+    private JSONObject uploadBook(ItemStack inHand) {
+		return Bookshop_requests.uploadBook(inHand, master.bookshop_token, master.bookshop_login);
+	}
+    
+    // version on /give le book
+    private static void createBook(final String title, final List pagesArray, final String author, final EntityPlayer player) {
+    	new Thread() {
+	      public void run() {
+	        //String s = "BS|BSign";
+	    	  String s = "ephys.bookshop";
+	        ItemStack itemstackBook = new ItemStack(Item.writtenBook, 1);
+	        NBTTagCompound nbttagcompound = itemstackBook.getTagCompound();
+	        
+	        NBTTagList pages_tag = new NBTTagList("pages");
+	        for (int i = 0; i < pagesArray.size(); i++) {
+	        	pages_tag.appendTag(new NBTTagString(i + 1 + "", ((String)pagesArray.get(i)).replaceAll("\r", "")));
+	        }
+
+	        itemstackBook.setTagInfo("author", new NBTTagString("author", author.trim()));
+	        itemstackBook.setTagInfo("title", new NBTTagString("title", title.trim()));
+	        itemstackBook.setTagInfo("pages", pages_tag);
+	        player.dropPlayerItem(itemstackBook);
+
+	        ByteArrayOutputStream bytearrayoutputstream = new ByteArrayOutputStream();
+	        DataOutputStream dataoutputstream = new DataOutputStream(bytearrayoutputstream);
+	        try 
+	        {
+                Packet.writeItemStack(itemstackBook, dataoutputstream);
+                //FMLCommonHandler.instance().getSidedDelegate().sendPacket(new Packet250CustomPayload(s, bytearrayoutputstream.toByteArray()));
+	    		  Side side = FMLCommonHandler.instance().getEffectiveSide();
+	              if (side == Side.CLIENT) {
+	            	  EntityClientPlayerMP playerMP = (EntityClientPlayerMP) player;
+	            	  playerMP.sendQueue.addToSendQueue(new Packet250CustomPayload(s, bytearrayoutputstream.toByteArray()));
+	              }
+	        }
+	        catch (Exception exception)
+	        {
+	        	exception.printStackTrace();
+	        }
+	      }
+	    }
+	    .start();
+    }
+    
+    private void parseBookList_user(EntityPlayer player, JSONObject json_data) {
+    	try {
+			if(json_data.isNull("error")) {
+				List<String> keys = Bookshop_requests.getJSONListKeys(json_data);
+				
+			    if(keys.size() < 3)
+			    	player.sendChatToPlayer("["+json_data.getString("author")+"] "+master.modTranslation.get("bookListEmpty"));
+			    else {
+			    	player.sendChatToPlayer(master.modTranslation.get("bookList"));
+				    for(String key : keys) {
+				    	if(key.equalsIgnoreCase("author") || key.equalsIgnoreCase("type"))
+				    		continue;
+	
+				    	JSONObject book = json_data.getJSONObject(key);
+				    	player.sendChatToPlayer("- "+book.getString("title") + " (" + book.getString("id") + ")");
+				    }
+			    }
+			} else {
+				player.sendChatToPlayer(json_data.getString("error"));
+			}
+    	} catch(Exception e) {
+    		player.sendChatToPlayer(master.modTranslation.get("requestError"));
+    	}
+    }
+    
+    private void parseBookList_general(EntityPlayer player, JSONObject json_data) {
+    	try {
+			if(json_data.isNull("error")) {
+				List<String> keys = Bookshop_requests.getJSONListKeys(json_data);
+				
+			    if(keys.size() < 2)
+			    	player.sendChatToPlayer(master.modTranslation.get("bookListEmpty"));
+			    else {
+			    	player.sendChatToPlayer(master.modTranslation.get("bookList"));
+				    for(String key : keys) {
+				    	if(key.equalsIgnoreCase("type"))
+				    		continue;
+				    	JSONObject book = json_data.getJSONObject(key);
+				    	player.sendChatToPlayer("- "+book.getString("title") + " (" + book.getString("id") + ")");
+				    }	
+			    }
+			} else {
+				player.sendChatToPlayer(json_data.getString("error"));
+			}
+		} catch (JSONException e) {
+			player.sendChatToPlayer(master.modTranslation.get("requestError"));
+		}
+    }
+    
+    private void parseBookList_title(EntityPlayer player, JSONObject json_data) {
+		try {
+			if(json_data.isNull("error")) {
+				List<String> keys = Bookshop_requests.getJSONListKeys(json_data);
+				
+			    if(keys.size() < 3)
+			    	player.sendChatToPlayer(master.modTranslation.get("searchListEmpty"));
+			    else {
+			    	player.sendChatToPlayer(master.modTranslation.get("titleList")+" '"+json_data.getString("title")+"'");
+				    for(String key : keys){
+				    	if(key.equalsIgnoreCase("title") || key.equalsIgnoreCase("type"))
+				    		continue;
+				    	
+				    	JSONObject book = json_data.getJSONObject(key);
+				    	player.sendChatToPlayer("- "+book.getString("title") + " (" + book.getString("id") + ")");
+				    }
+			    }
+			} else {
+				player.sendChatToPlayer(json_data.getString("error"));
+			}
+		} catch (JSONException e) {
+			player.sendChatToPlayer(master.modTranslation.get("requestError"));
+		}
+    }
 }
+

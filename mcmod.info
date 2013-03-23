@@ -1,0 +1,30 @@
+[{
+    "modid": "ephys.bookshop.cmd",
+    "name": "Bookshop Commands",
+    "description": "Sharing Minecraft books with anyone.",
+    "version": "1.7.0",
+    "credits": "Created by EphysPotato",
+    "logoFile": "/mods/Bookshop/textures/gui/logo_text.png",
+    "mcversion": "1.5",
+    "url": "http://bookshop.fr.nf",
+    "updateUrl": "",
+    "authors": ["EphysPotato"],
+    "parent":"",
+    "screenshots": [],
+    "dependencies": ["mod_MinecraftForge"]
+},
+{
+    "modid": "ephys.bookshop.gui",
+    "name": "Bookshop Interface",
+    "description": "Sharing Minecraft books with anyone.",
+    "version": "1.0.0",
+    "credits": "Created by EphysPotato",
+    "logoFile": "/mods/Bookshop/textures/gui/logo_text.png",
+    "mcversion": "1.5",
+    "url": "http://bookshop.fr.nf",
+    "updateUrl": "",
+    "authors": ["EphysPotato"],
+    "parent":"ephys.bookshop.cmd",
+    "screenshots": [],
+    "dependencies": ["mod_MinecraftForge", "ephys.bookshop.cmd"]
+}]
